@@ -90,15 +90,18 @@ async function torontoParkingGetTicketAmount(violationNum, plateNum, maxAttempts
       window.scrollBy(0, 200 + Math.random() * 200);
       await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (700 - 200 + 1)) + 200));
 
-      // Agree to terms
+      // Agree to terms if the button is present (it only shows on the first visit)
       const termsButton = await waitForSelector('#cot-terms-agree', 5000);
-      if (!termsButton) throw new Error('Terms button (#cot-terms-agree) not found');
-      console.log('Hovering over terms button...');
-      termsButton.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (800 - 200 + 1)) + 200));
-      console.log('Clicking terms button...');
-      termsButton.click();
-      await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (900 - 400 + 1)) + 400));
+      if (termsButton) {
+        console.log('Hovering over terms button...');
+        termsButton.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (800 - 200 + 1)) + 200));
+        console.log('Clicking terms button...');
+        termsButton.click();
+        await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (900 - 400 + 1)) + 400));
+      } else {
+        console.log('Terms button not found, continuing without clicking');
+      }
 
       // Click "Lookup by License Plate"
       const lookupButton = await waitForSelector('#lookupvialp', 5000);
