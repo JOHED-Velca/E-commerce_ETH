@@ -172,11 +172,9 @@ async function torontoParkingGetTicketAmount(violationNum, plateNum, maxAttempts
         }
       }
 
-      // Submit
-      const submitButton = document.querySelector('button:not([disabled])');
-      if (!submitButton || submitButton.textContent.trim() !== 'Lookup Ticket') {
-        throw new Error('Submit button (Lookup Ticket) not found');
-      }
+      // Submit using the same selector as the driverless script
+      const submitButton = await waitForSelector('#singlebutton', 5000);
+      if (!submitButton) throw new Error('Submit button (#singlebutton) not found');
       console.log('Hovering over submit button...');
       submitButton.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (800 - 200 + 1)) + 200));
