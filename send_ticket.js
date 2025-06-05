@@ -1,30 +1,65 @@
+// send_ticket.js
 const axios = require('axios');
-const { io } = require('socket.io-client');
-
 
 const plate = process.argv[2] || 'czcl340';
 const ticket = process.argv[3] || 'PM451052';
 
-const socket = io('http://localhost:3000', { transports: ['websocket'] });
+const ENQUEUE_URL = 'http://localhost:3000/enqueue';
+const RESULT_URL = (ticketNum, plateNum) => `http://localhost:3000/result/${ticketNum}/${plateNum}`;
 
-socket.on('connect', async () => {
+async function main() {
   try {
-    await axios.post('http://localhost:3000/enqueue', { plateNum: plate, ticketNum: ticket });
-    console.log('Enqueued ticket, waiting for result...');
+    // 1) Enqueue the ticket via REST
+    await axios.post(ENQUEUE_URL, { plateNum: plate, ticketNum: ticket });
+    console.log(`Enqueued ticket ${ticket} / plate ${plate}. Waiting for result...`);
   } catch (err) {
-    console.error('Enqueue failed:', err.response ? err.response.data : err.message);
+    if (err.response && err.response.data) {
+      console.error('Enqueue failed:', err.response.data);
+    } else {
+      console.error('Enqueue failed:', err.message);
+    }
     process.exit(1);
   }
-});
 
-socket.on('result', (data) => {
-  if (data.ticketNum === ticket && data.plateNum === plate) {
-    console.log('Result received:', JSON.stringify(data.response, null, 2));
-    process.exit(0);
-  }
-});
+  // 2) Start polling every 1 second for the result
+  const intervalMs = 1000;
+  let polls = 0;
+  const maxPolls = 60; // 60 seconds total
 
-setTimeout(() => {
-  console.error('Timed out waiting for result');
-  process.exit(1);
-}, 60000);
+  const intervalId = setInterval(async () => {
+    polls += 1;
+
+    try {
+      const res = await axios.get(RESULT_URL(ticket, plate));
+      // If we get here, the result is ready (status 200)
+      console.log('Result received:', JSON.stringify(res.data.response, null, 2));
+      clearInterval(intervalId);
+      clearTimeout(timeoutId);
+      process.exit(0);
+    } catch (err) {
+      // If 404, result not ready yet—just continue polling
+      if (err.response && err.response.status === 404) {
+        // Still pending; do nothing
+      } else {
+        // Some other error: log and exit
+        if (err.response && err.response.data) {
+          console.error('Error fetching result:', err.response.data);
+        } else {
+          console.error('Error fetching result:', err.message);
+        }
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        process.exit(1);
+      }
+    }
+  }, intervalMs);
+
+  // 3) Timeout after 60 seconds
+  const timeoutId = setTimeout(() => {
+    console.error('Timed out waiting for result');
+    clearInterval(intervalId);
+    process.exit(1);
+  }, maxPolls * intervalMs);
+}
+
+main();
