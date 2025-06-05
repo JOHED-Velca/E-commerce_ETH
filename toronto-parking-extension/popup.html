@@ -4,30 +4,64 @@
   <title>Toronto Parking Worker</title>
   <style>
     body {
-      width: 200px;
-      padding: 10px;
+      width: 220px;
+      padding: 12px;
       font-family: Arial, sans-serif;
       font-size: 14px;
+      box-sizing: border-box;
     }
-    button {
+
+    /* ─────────── Toggle‐style button ─────────── */
+    #toggleBtn {
       width: 100%;
       padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.2s, color 0.2s;
+      outline: none;
+    }
+
+    /* Enabled state: filled with brand color */
+    #toggleBtn.enabled {
       background-color: #007bff;
       color: white;
-      border: none;
-      cursor: pointer;
+      border: 1px solid #007bff;
     }
-    button:hover {
+    #toggleBtn.enabled:hover {
       background-color: #0056b3;
+      border-color: #0056b3;
     }
+
+    /* Disabled state: outline only, white background */
+    #toggleBtn.disabled {
+      background-color: white;
+      color: #007bff;
+      border: 1px solid #007bff;
+    }
+    #toggleBtn.disabled:hover {
+      background-color: #e6f0ff;
+    }
+
+    /* ─────────── Status text ─────────── */
     #status {
       margin-top: 10px;
+    }
+
+    /* Last processed ticket */
+    #lastProcessed {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #555;
+      word-break: break-all;
     }
   </style>
 </head>
 <body>
-  <button id="toggleBtn">Enable Worker</button>
-  <div id="status">Status: disabled</div>
+  <button id="toggleBtn" class="disabled">Enable Worker</button>
+  <div id="status">Status: <span id="statetext">disabled</span></div>
+  <div id="lastProcessed">Last processed: <span id="lastText">none</span></div>
+
   <script src="popup.js"></script>
 </body>
 </html>

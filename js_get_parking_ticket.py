@@ -13,12 +13,15 @@ class TicketFetchError(Exception):
     """Raised when fetching a ticket result fails with an unexpected HTTP status."""
     pass
 
-def fetch_ticket_result(plate_num: str, ticket_num: str,
-                        base_url: str = "http://localhost:3000",
-                        timeout: float = 60.0) -> dict:
+def fetch_ticket_result(
+    plate_num: str,
+    ticket_num: str,
+    base_url: str = "http://localhost:3000",
+    timeout: float = 60.0
+) -> dict:
     """
-    Enqueue a (ticket_num, plate_num) pair via REST and poll until the result is ready
-    or until the timeout is reached. Returns the 'response' payload as a dict.
+    Enqueue a (ticket_num, plate_num) pair via REST and poll /ticket until the status is 'completed'
+    or until timeout is reached. Returns the 'response' JSON payload once ready.
 
     Args:
         plate_num (str): The plate number to enqueue.
@@ -27,29 +30,29 @@ def fetch_ticket_result(plate_num: str, ticket_num: str,
         timeout (float): Maximum seconds to wait for the result (default 60).
 
     Returns:
-        dict: The JSON payload under "response" from the server.
+        dict: The JSON payload under "response" from the server once status == 'completed'.
 
     Raises:
-        TicketEnqueueError: If the initial POST /enqueue fails (e.g. duplicate or other 4xx/5xx).
-        TicketTimeoutError: If no result arrives within `timeout` seconds.
-        TicketFetchError: If GET /result returns an unexpected status (not 200 or 404).
+        TicketEnqueueError: If POST /enqueue fails (e.g. 4xx/5xx or network error).
+        TicketTimeoutError: If the ticket never reaches 'completed' before timeout.
+        TicketFetchError: If GET /ticket returns an unexpected status code (other than 404 or 200).
     """
     enqueue_url = f"{base_url}/enqueue"
-    result_url = f"{base_url}/result/{ticket_num}/{plate_num}"
+    ticket_url = f"{base_url}/ticket/{ticket_num}/{plate_num}"
 
     # 1) Enqueue the ticket
     try:
         resp = requests.post(
             enqueue_url,
             json={"plateNum": plate_num, "ticketNum": ticket_num},
-            timeout=10  # short timeout for the enqueue call
+            timeout=10
         )
     except requests.RequestException as e:
         raise TicketEnqueueError(f"Failed to enqueue ticket: {e}")
 
     if resp.status_code == 409:
-        # Duplicate entry or already processed
-        raise TicketEnqueueError(f"Enqueue conflict (duplicate): {resp.json()}")
+        # Duplicate or already processed
+        raise TicketEnqueueError(f"Enqueue conflict (duplicate or already processed): {resp.json()}")
     elif not resp.ok:
         # Any other HTTP error
         try:
@@ -58,7 +61,7 @@ def fetch_ticket_result(plate_num: str, ticket_num: str,
             detail = resp.text
         raise TicketEnqueueError(f"Enqueue failed (HTTP {resp.status_code}): {detail}")
 
-    # 2) Poll for the result every 1 second until timeout
+    # 2) Poll /ticket until 'completed' or timeout
     start_time = time.monotonic()
     while True:
         elapsed = time.monotonic() - start_time
@@ -66,36 +69,44 @@ def fetch_ticket_result(plate_num: str, ticket_num: str,
             raise TicketTimeoutError(f"Timeout after {timeout:.0f} seconds waiting for result")
 
         try:
-            r = requests.get(result_url, timeout=10)
+            r = requests.get(ticket_url, timeout=10)
         except requests.RequestException as e:
-            raise TicketFetchError(f"Error fetching result: {e}")
+            raise TicketFetchError(f"Error fetching ticket status: {e}")
 
-        if r.status_code == 200:
-            # Successful response; parse and return the "response" field
-            try:
-                data = r.json()
-                return data
-            except ValueError:
-                raise TicketFetchError("Result endpoint returned invalid JSON")
-        elif r.status_code == 404:
-            # Not ready yet; sleep and retry
+        if r.status_code == 404:
+            # Not yet in server’s Map (either not enqueued yet or removed). 
+            # Wait and retry.
             time.sleep(1.0)
             continue
-        else:
-            # Unexpected status code
+
+        if r.status_code == 200:
             try:
-                detail = r.json()
+                data = r.json()
             except ValueError:
-                detail = r.text
-            raise TicketFetchError(f"Unexpected HTTP {r.status_code} from result endpoint: {detail}")
+                raise TicketFetchError("GET /ticket returned invalid JSON")
+
+            status = data.get("status")
+            if status == "completed":
+                # Return the payload under "response"
+                return data.get("response", {})
+            else:
+                # status is 'pending' or 'assigned'; not ready yet
+                time.sleep(1.0)
+                continue
+
+        # Any other status is an unexpected error
+        try:
+            detail = r.json()
+        except ValueError:
+            detail = r.text
+        raise TicketFetchError(f"Unexpected HTTP {r.status_code} from /ticket: {detail}")
 
 
 if __name__ == '__main__':
-    # Test values: replace with real plate/ticket if needed
-    test_plate = "czcl340"
-    test_ticket = "PM451052"
-
-    print(f"Enqueuing ticket {test_ticket} for plate {test_plate} and waiting up to 60 seconds for a result...")
+    # Quick test with dummy values (replace with a real plate/ticket to test)
+    test_plate = "ABC1234"
+    test_ticket = "PARK5678"
+    print(f"Enqueuing ticket {test_ticket} for plate {test_plate}, waiting up to 60s for result...")
     try:
         result = fetch_ticket_result(test_plate, test_ticket, base_url="http://localhost:3000", timeout=60.0)
         print("Result received:")

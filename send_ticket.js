@@ -1,11 +1,16 @@
 // send_ticket.js
+// ─────────────────────────────────────────────────────────────────────────────
+// Node.js test script to enqueue a ticket and poll /ticket until it's completed.
+// Updated to use GET /ticket/:ticketNum/:plateNum (instead of the old /result).
+// ─────────────────────────────────────────────────────────────────────────────
+
 const axios = require('axios');
 
 const plate = process.argv[2] || 'czcl340';
 const ticket = process.argv[3] || 'PM451052';
 
 const ENQUEUE_URL = 'http://localhost:3000/enqueue';
-const RESULT_URL = (ticketNum, plateNum) => `http://localhost:3000/result/${ticketNum}/${plateNum}`;
+const TICKET_URL = (ticketNum, plateNum) => `http://localhost:3000/ticket/${ticketNum}/${plateNum}`;
 
 async function main() {
   try {
@@ -21,45 +26,49 @@ async function main() {
     process.exit(1);
   }
 
-  // 2) Start polling every 1 second for the result
-  const intervalMs = 1000;
-  let polls = 0;
-  const maxPolls = 60; // 60 seconds total
+  let timeoutId = null;
 
   const intervalId = setInterval(async () => {
-    polls += 1;
-
     try {
-      const res = await axios.get(RESULT_URL(ticket, plate));
-      // If we get here, the result is ready (status 200)
-      console.log('Result received:', JSON.stringify(res.data.response, null, 2));
-      clearInterval(intervalId);
-      clearTimeout(timeoutId);
-      process.exit(0);
-    } catch (err) {
-      // If 404, result not ready yet—just continue polling
-      if (err.response && err.response.status === 404) {
-        // Still pending; do nothing
+      const res = await axios.get(TICKET_URL(ticket, plate));
+      // Got a 200; check the status field
+      const data = res.data;
+      const status = data.status;
+
+      if (status === 'completed') {
+        console.log('Result received:', JSON.stringify(data.response, null, 2));
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        process.exit(0);
       } else {
-        // Some other error: log and exit
-        if (err.response && err.response.data) {
-          console.error('Error fetching result:', err.response.data);
-        } else {
-          console.error('Error fetching result:', err.message);
-        }
+        // status is 'pending' or 'assigned'; keep polling
+        // (the server deletes the ticket entry after each GET, so re-enqueue if still pending)
+        console.log(`Ticket ${ticket}|${plate} status: ${status}. Retrying...`);
+      }
+    } catch (err) {
+      if (err.response && err.response.status === 404) {
+        // Ticket not found yet (or was removed). Simply retry.
+        console.log(`Ticket ${ticket}|${plate} not found yet. Retrying...`);
+      } else if (err.response && err.response.data) {
+        console.error('Error fetching ticket:', err.response.data);
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        process.exit(1);
+      } else {
+        console.error('Error fetching ticket:', err.message);
         clearInterval(intervalId);
         clearTimeout(timeoutId);
         process.exit(1);
       }
     }
-  }, intervalMs);
+  }, 1000);
 
   // 3) Timeout after 60 seconds
-  const timeoutId = setTimeout(() => {
+  timeoutId = setTimeout(() => {
     console.error('Timed out waiting for result');
     clearInterval(intervalId);
     process.exit(1);
-  }, maxPolls * intervalMs);
+  }, 60 * 1000);
 }
 
 main();
