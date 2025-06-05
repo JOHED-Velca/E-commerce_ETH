@@ -42,13 +42,14 @@ async function main() {
         process.exit(0);
       } else {
         // status is 'pending' or 'assigned'; keep polling
-        // (the server deletes the ticket entry after each GET, so re-enqueue if still pending)
         console.log(`Ticket ${ticket}|${plate} status: ${status}. Retrying...`);
       }
     } catch (err) {
       if (err.response && err.response.status === 404) {
-        // Ticket not found yet (or was removed). Simply retry.
-        console.log(`Ticket ${ticket}|${plate} not found yet. Retrying...`);
+        console.error('Ticket not found:', err.response.data);
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        process.exit(1);
       } else if (err.response && err.response.data) {
         console.error('Error fetching ticket:', err.response.data);
         clearInterval(intervalId);
