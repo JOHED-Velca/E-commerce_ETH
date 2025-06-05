@@ -1,10 +1,10 @@
 // background.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Polling-based worker. When enabled it polls the server every second for work
+// Polling-based worker. When enabled, it polls the server every second for work
 // and sends heartbeats while processing a ticket. Uses HTTP endpoints instead of
 // Socket.IO. Single interval manages both tasks.
-// If “Could not establish connection” is detected, we re-inject content.js and retry.
-// We also listen for “lookupResult” messages that content.js may send after navigation.
+// No retries or local-storage fallbacks: each lookup is a single sendMessage.
+// Assumes content.js is injected once via manifest.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SERVER_URL = 'http://localhost:3000';
@@ -18,10 +18,6 @@ let currentTicket = null; // { ticketNum, plateNum }
 let lastProcessed = null;
 let pollTimer = null;
 let lookupTimeoutId = null;
-
-// Keep a temporary resolver so that if content.js sends back “lookupResult” we
-// can fulfill the original lookup Promise.
-let pendingLookupResolver = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Popup communication helpers
@@ -126,10 +122,8 @@ function clearCurrentLookup() {
   currentTicket = null;
   busy = false;
   updatePopupStatus();
-  pendingLookupResolver = null;
 }
 
-// Send the final lookup result (or error) back to the server
 function sendResult(response) {
   if (!currentTicket) return;
   const { ticketNum, plateNum } = currentTicket;
@@ -145,7 +139,6 @@ function sendResult(response) {
   clearCurrentLookup();
 }
 
-// Main entry for handling a new ticket
 function handleTicket(ticketNum, plateNum) {
   currentTicket = { ticketNum, plateNum };
   busy = true;
@@ -163,23 +156,16 @@ function handleTicket(ticketNum, plateNum) {
     sendResult({ error: true, message: 'Lookup timeout (30 s). Page reloaded.' });
   }, LOOKUP_TIMEOUT_MS);
 
-  // Try to run the lookup; if the content script isn't there, re-inject and retry once
   runLookupInActiveTab(ticketNum, plateNum)
     .then((result) => {
-      if (result) {
-        sendResult(result);
-      } else {
-        // Should not happen—runLookup always resolves with something.
-        sendResult({ error: true, message: 'Empty response from lookup.' });
-      }
+      sendResult(result || { error: true, message: 'Empty response from lookup.' });
     })
     .catch((err) => {
       sendResult({ error: true, message: err.message || 'Lookup failed' });
     });
 }
 
-// Attempt to inject content.js, send “runLookup,” and await a response.
-// If “Could not establish connection” is seen, re‐inject and retry once.
+// Run a single sendMessage; assumes content.js is already injected via manifest
 function runLookupInActiveTab(ticketNum, plateNum) {
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -191,108 +177,30 @@ function runLookupInActiveTab(ticketNum, plateNum) {
       }
       const tabId = tab.id;
 
-      // Ensure we’re on the correct domain
       if (!tab.url.startsWith(TARGET_URL_PREFIX)) {
         clearTimeout(lookupTimeoutId);
         lookupTimeoutId = null;
-        return reject(
-          new Error('Lookup can only run on the Toronto parking page.')
-        );
+        return reject(new Error('Lookup can only run on the Toronto parking page.'));
       }
 
-      // Step 1: Inject content.js
-      chrome.scripting.executeScript(
-        {
-          target: { tabId },
-          files: ['content.js'],
-        },
-        () => {
-          // After injection, send the “runLookup” message
-          sendRunLookupMessage(tabId, ticketNum, plateNum, /*retry=*/ false)
-            .then((result) => {
-              clearTimeout(lookupTimeoutId);
-              lookupTimeoutId = null;
-              resolve(result);
-            })
-            .catch((err) => {
-              // If the error is “Could not establish connection…”, try once more
-              if (
-                err.message &&
-                err.message.includes('Receiving end does not exist')
-              ) {
-                console.warn(
-                  'First sendMessage failed—retrying after re-injection'
-                );
-                // Re-inject and retry
-                chrome.scripting.executeScript(
-                  {
-                    target: { tabId },
-                    files: ['content.js'],
-                  },
-                  () => {
-                    sendRunLookupMessage(tabId, ticketNum, plateNum, /*retry=*/ true)
-                      .then((result2) => {
-                        clearTimeout(lookupTimeoutId);
-                        lookupTimeoutId = null;
-                        resolve(result2);
-                      })
-                      .catch((err2) => {
-                        clearTimeout(lookupTimeoutId);
-                        lookupTimeoutId = null;
-                        reject(err2);
-                      });
-                  }
-                );
-              } else {
-                clearTimeout(lookupTimeoutId);
-                lookupTimeoutId = null;
-                reject(err);
-              }
-            });
+      // Send the runLookup message to the already‐injected content script
+      chrome.tabs.sendMessage(
+        tabId,
+        { action: 'runLookup', ticketNum, plateNum },
+        (response) => {
+          clearTimeout(lookupTimeoutId);
+          lookupTimeoutId = null;
+
+          if (chrome.runtime.lastError || !response) {
+            const msg = chrome.runtime.lastError
+              ? chrome.runtime.lastError.message
+              : 'No response from content script';
+            return reject(new Error(msg));
+          }
+          resolve(response);
         }
       );
     });
-
-    // Also listen for a “lookupResult” event, in case content.js navigated and sent by runtime.sendMessage
-    function onLookupResult(msg, sender) {
-      if (msg.action === 'lookupResult') {
-        chrome.runtime.onMessage.removeListener(onLookupResult);
-        if (pendingLookupResolver) {
-          pendingLookupResolver(msg.result);
-          pendingLookupResolver = null;
-        }
-      }
-    }
-    chrome.runtime.onMessage.addListener(onLookupResult);
-  });
-}
-
-// Send the actual runLookup message; return a promise that resolves with the response
-function sendRunLookupMessage(tabId, ticketNum, plateNum, retry) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { action: 'runLookup', ticketNum, plateNum },
-      (response) => {
-        if (chrome.runtime.lastError || !response) {
-          const msg = chrome.runtime.lastError
-            ? chrome.runtime.lastError.message
-            : 'No response from content script';
-
-          // If this was our retry attempt, give up
-          if (retry) {
-            return reject(new Error(msg));
-          }
-          // Otherwise, report back up so caller can choose to re-inject & retry
-          return reject(new Error(msg));
-        }
-        // Normal successful response
-        resolve(response);
-      }
-    );
-
-    // Set up pendingLookupResolver in case content.js does navigation and calls chrome.runtime.sendMessage({action:'lookupResult', result})
-    pendingLookupResolver = resolve;
   });
 }
 
@@ -321,27 +229,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
 
     case 'runLookup':
-      // If user manually clicks “Lookup” from popup, we do the same injection & send logic:
+      // Manual lookup from popup: simply send the message
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs[0];
         if (tab?.id && tab.url.startsWith(TARGET_URL_PREFIX)) {
           const tabId = tab.id;
-          chrome.scripting.executeScript(
+          chrome.tabs.sendMessage(
+            tabId,
             {
-              target: { tabId },
-              files: ['content.js'],
+              action: 'runLookup',
+              ticketNum: request.ticketNum,
+              plateNum: request.plateNum,
             },
-            () => {
-              sendRunLookupMessage(
-                tabId,
-                request.ticketNum,
-                request.plateNum,
-                /*retry=*/ false
-              )
-                .then((resp) => sendResponse(resp))
-                .catch((err) =>
-                  sendResponse({ error: true, message: err.message })
-                );
+            (resp) => {
+              if (chrome.runtime.lastError || !resp) {
+                const msg = chrome.runtime.lastError
+                  ? chrome.runtime.lastError.message
+                  : 'No response from content script';
+                return sendResponse({ error: true, message: msg });
+              }
+              sendResponse(resp);
             }
           );
         } else {
