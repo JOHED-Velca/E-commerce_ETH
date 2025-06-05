@@ -5,7 +5,8 @@
   "description": "Automates Toronto parking ticket lookup and extracts details.",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://secure.toronto.ca/webapps/parking/*",
@@ -19,9 +20,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://secure.toronto.ca/webapps/parking/*"
-      ],
+      "matches": ["https://secure.toronto.ca/webapps/parking/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

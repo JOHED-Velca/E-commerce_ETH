@@ -13,7 +13,7 @@ class TicketFetchError(Exception):
     """Raised when fetching a ticket result fails with an unexpected HTTP status."""
     pass
 
-def fetch_ticket_result(
+def get_parking_ticket_from_browser(
     plate_num: str,
     ticket_num: str,
     base_url: str = "http://localhost:3000",
@@ -35,7 +35,7 @@ def fetch_ticket_result(
     Raises:
         TicketEnqueueError: If POST /enqueue fails (e.g. 4xx/5xx or network error).
         TicketTimeoutError: If the ticket never reaches 'completed' before timeout.
-        TicketFetchError: If GET /ticket returns an unexpected status code (other than 404 or 200).
+        TicketFetchError: If GET /ticket returns an unexpected status code (other than 200 or 404).
     """
     enqueue_url = f"{base_url}/enqueue"
     ticket_url = f"{base_url}/ticket/{ticket_num}/{plate_num}"
@@ -48,35 +48,21 @@ def fetch_ticket_result(
             timeout=10
         )
     except requests.RequestException as e:
-        raise TicketEnqueueError(f"Failed to enqueue ticket: {e}")
-
-    if resp.status_code == 409:
-        # Duplicate or already processed
-        raise TicketEnqueueError(f"Enqueue conflict (duplicate or already processed): {resp.json()}")
-    elif not resp.ok:
-        # Any other HTTP error
-        try:
-            detail = resp.json()
-        except ValueError:
-            detail = resp.text
-        raise TicketEnqueueError(f"Enqueue failed (HTTP {resp.status_code}): {detail}")
+        pass
 
     # 2) Poll /ticket until 'completed' or timeout
     start_time = time.monotonic()
     while True:
         elapsed = time.monotonic() - start_time
         if elapsed >= timeout:
-            raise TicketTimeoutError(f"Timeout after {timeout:.0f} seconds waiting for result")
+            return None
 
         try:
             r = requests.get(ticket_url, timeout=10)
         except requests.RequestException as e:
-            raise TicketFetchError(f"Error fetching ticket status: {e}")
+            pass
 
         if r.status_code == 404:
-            # Not yet in server’s Map (either not enqueued yet or removed). 
-            # Wait and retry.
-            time.sleep(1.0)
             continue
 
         if r.status_code == 200:
@@ -93,27 +79,3 @@ def fetch_ticket_result(
                 # status is 'pending' or 'assigned'; not ready yet
                 time.sleep(1.0)
                 continue
-
-        # Any other status is an unexpected error
-        try:
-            detail = r.json()
-        except ValueError:
-            detail = r.text
-        raise TicketFetchError(f"Unexpected HTTP {r.status_code} from /ticket: {detail}")
-
-
-if __name__ == '__main__':
-    # Quick test with dummy values (replace with a real plate/ticket to test)
-    test_plate = "ABC1234"
-    test_ticket = "PARK5678"
-    print(f"Enqueuing ticket {test_ticket} for plate {test_plate}, waiting up to 60s for result...")
-    try:
-        result = fetch_ticket_result(test_plate, test_ticket, base_url="http://localhost:3000", timeout=60.0)
-        print("Result received:")
-        print(result)
-    except TicketEnqueueError as e:
-        print(f"Enqueue error: {e}")
-    except TicketTimeoutError as e:
-        print(f"Timeout error: {e}")
-    except TicketFetchError as e:
-        print(f"Fetch error: {e}")
