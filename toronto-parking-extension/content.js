@@ -205,21 +205,37 @@
         return { error: true, message: 'Unexpected table format: fewer than 6 columns' };
       }
 
-      const number = cells[0].innerText.trim();
-      const date = cells[1].innerText.trim();
-      const plate = cells[2].innerText.trim();
-      const status = cells[3].innerText.trim();
+      // The first column now contains a checkbox with useful data attributes
+      // (ticket number, plate, fine amounts). Extract values from the checkbox
+      // and adjust column indexes accordingly.
+      const checkbox = row.querySelector('input[data-ticketno]');
+      const plate = checkbox?.dataset.plateno
+        ? checkbox.dataset.plateno.trim()
+        : '';
+      const number = cells[1].innerText.trim();
+      const status = cells[2].innerText.trim();
+      const date = cells[3].innerText.trim();
       const amount = cells[4].innerText.replace('$', '').trim();
       const action = cells[5].innerText.trim();
+
+      const fineAmount = checkbox?.dataset.fineamount
+        ? checkbox.dataset.fineamount.replace('$', '').trim()
+        : null;
+      const otherCharge = checkbox?.dataset.othercharge
+        ? checkbox.dataset.othercharge.replace('$', '').trim()
+        : null;
+      const totalCharge = checkbox?.dataset.price
+        ? checkbox.dataset.price.replace('$', '').trim()
+        : amount;
 
       return {
         error: false,
         success: {
           innerInformation: {
-            total: amount,
-            amount,
-            additionalCost: null,
-            amountDue: amount,
+            total: totalCharge,
+            amount: fineAmount,
+            additionalCost: otherCharge,
+            amountDue: totalCharge,
             courtDateTime: null,
             courtLocation: null,
             dueDate: null,
@@ -237,7 +253,7 @@
         date,
         plate,
         status,
-        amount,
+        amount: totalCharge,
         action,
       };
     } catch (err) {
