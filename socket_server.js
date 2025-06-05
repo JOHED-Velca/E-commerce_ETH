@@ -82,13 +82,12 @@ app.get('/ticket/:ticketNum/:plateNum', (req, res) => {
   const result = { status: info.status };
   if (info.status === 'completed') {
     result.response = info.response;
+    tickets.delete(key); // remove once result delivered
   }
   if (info.status === 'assigned') {
     result.assignedTo = info.assignedTo;
   }
-  res.json(result);
-  tickets.delete(key);
-  return;
+  return res.json(result);
 });
 
 // ───────────────────────────────────────────────────────────────────────────────
