@@ -1,24 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Toronto Parking Lookup</title>
+  <title>Toronto Parking Worker</title>
   <style>
     body {
-      width: 300px;
+      width: 200px;
       padding: 10px;
       font-family: Arial, sans-serif;
       font-size: 14px;
-    }
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
-    }
-    input {
-      width: 100%;
-      padding: 5px;
-      margin-bottom: 10px;
-      box-sizing: border-box;
     }
     button {
       width: 100%;
@@ -31,40 +20,14 @@
     button:hover {
       background-color: #0056b3;
     }
-    button:disabled {
-      background-color: #6c757d;
-      cursor: not-allowed;
-    }
-    #result {
+    #status {
       margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      max-height: 200px;
-      overflow-y: auto;
-      display: none;
-    }
-    #result.error {
-      color: #721c24;
-      background-color: #f8d7da;
-      border-color: #f5c6cb;
-    }
-    #result.success {
-      color: #155724;
-      background-color: #d4edda;
-      border-color: #c3e6cb;
     }
   </style>
 </head>
 <body>
-  <label for="ticketNum">Ticket Number:</label>
-  <input type="text" id="ticketNum" value="PM451052">
-  <label for="plateNum">Plate Number:</label>
-  <input type="text" id="plateNum" value="czcl340">
-  <label for="csvFile">CSV File:</label>
-  <input type="file" id="csvFile" accept=".csv">
-  <button id="lookupButton">Lookup Ticket</button>
-  <div id="result"></div>
+  <button id="toggleBtn">Enable Worker</button>
+  <div id="status">Status: disabled</div>
   <script src="popup.js"></script>
 </body>
 </html>
