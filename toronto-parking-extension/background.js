@@ -12,7 +12,7 @@ function updatePopup() {
 
 function requestTicket() {
   if (!busy && enabled) {
-    socket.emit('ready', { clientId });
+    socket.emit('ready');
   }
 }
 

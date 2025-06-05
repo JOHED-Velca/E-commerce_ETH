@@ -4,4 +4,4 @@ This project contains scripts and a Chrome extension for automating Toronto park
 
 ## API Test
 
-Use `node send_ticket.js [PLATE] [TICKET]` to enqueue a lookup request on the local `socket_server.js` instance. Defaults are `czcl340` and `PM451052`.
+Run `node send_ticket.js [PLATE] [TICKET]` to enqueue a lookup request on the local `socket_server.js` and wait for the response via WebSocket. Defaults are `czcl340` and `PM451052`.

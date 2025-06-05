@@ -11,6 +11,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 const pending = [];
 const processing = new Map();
 const completed = new Set();
+const results = new Map();
 
 function ticketKey(t) {
   return `${t.ticketNum}|${t.plateNum}`;
@@ -41,6 +42,8 @@ io.on('connection', (socket) => {
     const key = ticketKey(current);
     processing.delete(key);
     completed.add(key);
+    results.set(key, data.response);
+    io.emit('result', { ticketNum: current.ticketNum, plateNum: current.plateNum, response: data.response });
     console.log('Result from', clientId, data.response);
     current = null;
   });
@@ -66,6 +69,16 @@ app.post('/enqueue', (req, res) => {
   pending.push(ticket);
   io.emit('queue_size', pending.length);
   res.json({ queued: true });
+});
+
+app.get('/result/:ticketNum/:plateNum', (req, res) => {
+  const key = `${req.params.ticketNum}|${req.params.plateNum}`;
+  if (results.has(key)) {
+    const response = results.get(key);
+    results.delete(key);
+    return res.json({ response });
+  }
+  res.status(404).json({ error: 'not ready' });
 });
 
 const PORT = process.env.PORT || 3000;
