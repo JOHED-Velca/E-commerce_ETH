@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { io } = require('socket.io-client');
 
+
 const plate = process.argv[2] || 'czcl340';
 const ticket = process.argv[3] || 'PM451052';
 
@@ -27,4 +28,3 @@ setTimeout(() => {
   console.error('Timed out waiting for result');
   process.exit(1);
 }, 60000);
-
