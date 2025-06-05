@@ -11,6 +11,8 @@ const SERVER_URL = 'http://localhost:3000';
 const POLL_INTERVAL_MS = 1000; // queue polling & heartbeat interval
 const LOOKUP_TIMEOUT_MS = 30000;
 const TARGET_URL_PREFIX = 'https://secure.toronto.ca/webapps/parking';
+const ALARM_NAME = 'tp-keepalive';
+const ALARM_INTERVAL_MIN = 1;
 
 // Stable id for this worker instance. Previously this was generated every time
 // `getClientId()` was called which meant heartbeats and results used a new id
@@ -23,6 +25,17 @@ let currentTicket = null; // { ticketNum, plateNum }
 let lastProcessed = null;
 let pollTimer = null;
 let lookupTimeoutId = null;
+
+// Load last enabled state from storage and set up keepalive alarm
+chrome.storage.local.get(['enabled'], (res) => {
+  enabled = res.enabled === true;
+  if (enabled) {
+    startPollAndHeartbeat();
+  }
+  updatePopupStatus();
+});
+
+chrome.alarms.create(ALARM_NAME, { periodInMinutes: ALARM_INTERVAL_MIN });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Popup communication helpers
@@ -155,13 +168,13 @@ function handleTicket(ticketNum, plateNum) {
   // If no lookup within TIMEOUT, reload and report error
   lookupTimeoutId = setTimeout(() => {
     console.error(`Lookup for ${key} timed out; reloading page`);
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
       if (tabs[0]?.id) chrome.tabs.reload(tabs[0].id);
     });
     sendResult({ error: true, message: 'Lookup timeout (30 s). Page reloaded.' });
   }, LOOKUP_TIMEOUT_MS);
 
-  runLookupInActiveTab(ticketNum, plateNum)
+  runLookupInParkingTab(ticketNum, plateNum)
     .then((result) => {
       sendResult(result || { error: true, message: 'Empty response from lookup.' });
     })
@@ -171,22 +184,17 @@ function handleTicket(ticketNum, plateNum) {
 }
 
 // Run a single sendMessage; assumes content.js is already injected via manifest
-function runLookupInActiveTab(ticketNum, plateNum) {
+// Find an open Toronto parking tab and run the lookup there
+function runLookupInParkingTab(ticketNum, plateNum) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
+    chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+      const tab = tabs && tabs.length > 0 ? tabs[0] : null;
       if (!tab?.id) {
         clearTimeout(lookupTimeoutId);
         lookupTimeoutId = null;
-        return reject(new Error('No active tab found'));
+        return reject(new Error('Toronto parking tab not found'));
       }
       const tabId = tab.id;
-
-      if (!tab.url.startsWith(TARGET_URL_PREFIX)) {
-        clearTimeout(lookupTimeoutId);
-        lookupTimeoutId = null;
-        return reject(new Error('Lookup can only run on the Toronto parking page.'));
-      }
 
       // Send the runLookup message to the already‐injected content script
       chrome.tabs.sendMessage(
@@ -216,6 +224,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
     case 'setEnabled':
       enabled = request.enabled;
+      chrome.storage.local.set({ enabled });
       updatePopupStatus();
       if (enabled) {
         startPollAndHeartbeat();
@@ -234,10 +243,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
 
     case 'runLookup':
-      // Manual lookup from popup: simply send the message
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs[0];
-        if (tab?.id && tab.url.startsWith(TARGET_URL_PREFIX)) {
+      // Manual lookup from popup: send the message to the first parking tab
+      chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+        const tab = tabs && tabs.length > 0 ? tabs[0] : null;
+        if (tab?.id) {
           const tabId = tab.id;
           chrome.tabs.sendMessage(
             tabId,
@@ -259,7 +268,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
           sendResponse({
             error: true,
-            message: 'Lookup can only run on the Toronto parking page.',
+            message: 'Toronto parking tab not found.',
           });
         }
       });
@@ -270,4 +279,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
   }
   return true;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alarm-based keepalive to ensure polling resumes
+// ─────────────────────────────────────────────────────────────────────────────
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== ALARM_NAME) return;
+  if (enabled) {
+    startPollAndHeartbeat();
+    chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+      if (!tabs || tabs.length === 0) {
+        chrome.tabs.create({ url: TARGET_URL_PREFIX });
+      }
+    });
+  }
 });

@@ -205,14 +205,40 @@
         return { error: true, message: 'Unexpected table format: fewer than 6 columns' };
       }
 
+      const number = cells[0].innerText.trim();
+      const date = cells[1].innerText.trim();
+      const plate = cells[2].innerText.trim();
+      const status = cells[3].innerText.trim();
+      const amount = cells[4].innerText.replace('$', '').trim();
+      const action = cells[5].innerText.trim();
+
       return {
         error: false,
-        number: cells[0].innerText.trim(),
-        date: cells[1].innerText.trim(),
-        plate: cells[2].innerText.trim(),
-        status: cells[3].innerText.trim(),
-        amount: cells[4].innerText.replace('$', '').trim(),
-        action: cells[5].innerText.trim(),
+        success: {
+          innerInformation: {
+            total: amount,
+            amount,
+            additionalCost: null,
+            amountDue: amount,
+            courtDateTime: null,
+            courtLocation: null,
+            dueDate: null,
+            infractionDesc: status,
+            infractionDateTime: date,
+            infractionLocation: status,
+          },
+          outerInformation: {
+            infractionLocation: status,
+            completeHTML: row.innerHTML,
+          },
+        },
+        fee: 0,
+        number,
+        date,
+        plate,
+        status,
+        amount,
+        action,
       };
     } catch (err) {
       return { error: true, message: err.message || 'Unknown error' };
