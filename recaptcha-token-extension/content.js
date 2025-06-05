@@ -1,12 +1,19 @@
-function loadRecaptcha(siteKey) {
+function waitForRecaptcha(timeout = 5000) {
   return new Promise((resolve, reject) => {
-    if (window.grecaptcha) return resolve();
-    if (!siteKey) return reject(new Error('siteKey not provided'));
-    const script = document.createElement('script');
-    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('recaptcha script failed to load'));
-    document.head.appendChild(script);
+    if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
+      return resolve();
+    }
+
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
+        clearInterval(interval);
+        resolve();
+      } else if (Date.now() - start > timeout) {
+        clearInterval(interval);
+        reject(new Error('grecaptcha not available'));
+      }
+    }, 100);
   });
 }
 
@@ -31,7 +38,7 @@ function detectSiteKey() {
 async function getToken(siteKey) {
   const finalKey = siteKey || detectSiteKey();
   if (!finalKey) throw new Error('Unable to detect sitekey');
-  await loadRecaptcha(finalKey);
+  await waitForRecaptcha();
   return new Promise((resolve, reject) => {
     grecaptcha.ready(() => {
       grecaptcha.execute(finalKey, { action: 'submit' }).then(resolve).catch(reject);
