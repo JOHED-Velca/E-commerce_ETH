@@ -1,323 +1,195 @@
 // background.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Chrome MV3 service worker that:
-//  • Only connects to Socket.IO when enabled.
-//  • Every 5 seconds, checks WebSocket health; if not connected and enabled, reconnect.
-//  • When connected and enabled (and not already busy), emits “ready” to fetch tickets.
-//  • Implements 30 s lookup timeout + page reload.
-//  • Sends a heartbeat every 10 s while busy.
-//  • Tracks lastProcessed and notifies popup.
+// Polling-based worker. When enabled it polls the server every second for work
+// and sends heartbeats while processing a ticket. Uses HTTP endpoints instead of
+// Socket.IO.
 // ─────────────────────────────────────────────────────────────────────────────
-
-importScripts('socket.io.min.js');
 
 const SERVER_URL = 'http://localhost:3000';
-const RECONNECT_INTERVAL_MS = 5000; // check every 5 seconds
+const POLL_INTERVAL_MS = 1000; // queue polling & heartbeat interval
+const LOOKUP_TIMEOUT_MS = 30000;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Generate a stable clientId for registration
-// ─────────────────────────────────────────────────────────────────────────────
+// Stable id for this worker instance
 const clientId = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
-let socket = null;
+let enabled = false;
 let busy = false;
-let enabled = false;       // Worker is disabled by default
-let currentTicket = null;  // { ticketNum, plateNum }
-let lookupTimeoutId = null;
-let heartbeatIntervalId = null;
+let currentTicket = null; // { ticketNum, plateNum }
 let lastProcessed = null;
 
+let pollTimer = null;
+let heartbeatTimer = null;
+let lookupTimeoutId = null;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Popup communication: send status and lastProcessed updates
+// Popup communication helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function updatePopupStatus() {
-  chrome.runtime.sendMessage({
-    action: 'statusUpdate',
-    enabled,
-    busy
-  });
+  chrome.runtime.sendMessage({ action: 'statusUpdate', enabled, busy });
 }
 
 function updatePopupLastProcessed() {
-  chrome.runtime.sendMessage({
-    action: 'lastProcessedUpdate',
-    last: lastProcessed
-  });
+  chrome.runtime.sendMessage({ action: 'lastProcessedUpdate', last: lastProcessed });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// If worker is enabled, not busy, and socket is connected, request a ticket.
+// HTTP helpers
 // ─────────────────────────────────────────────────────────────────────────────
-function requestTicket() {
-  if (enabled && !busy && socket && socket.connected) {
-    console.log('Background: emitting ready to request next ticket');
-    socket.emit('ready');
+async function postJSON(path, payload) {
+  try {
+    await fetch(`${SERVER_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.error(`POST ${path} failed`, err);
+  }
+}
+
+async function getJSON(path) {
+  try {
+    const res = await fetch(`${SERVER_URL}${path}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.error(`GET ${path} failed`, err);
+    return null;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Clear in-flight lookup: cancel timeout & heartbeat, mark busy=false, notify popup.
+// Worker registration
+// ─────────────────────────────────────────────────────────────────────────────
+function registerWorker() {
+  postJSON('/register', { clientId });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Polling & heartbeat management
+// ─────────────────────────────────────────────────────────────────────────────
+function startPolling() {
+  if (pollTimer) return;
+  registerWorker();
+  pollTimer = setInterval(async () => {
+    if (!enabled || busy) return;
+    const work = await getJSON(`/work/${clientId}`);
+    if (work && work.ticketNum && work.plateNum) {
+      handleTicket(work.ticketNum, work.plateNum);
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer || !currentTicket) return;
+  heartbeatTimer = setInterval(() => {
+    if (currentTicket) {
+      postJSON('/heartbeat', {
+        clientId,
+        ticketNum: currentTicket.ticketNum,
+        plateNum: currentTicket.plateNum
+      });
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ticket handling
 // ─────────────────────────────────────────────────────────────────────────────
 function clearCurrentLookup() {
-  if (lookupTimeoutId !== null) {
+  if (lookupTimeoutId) {
     clearTimeout(lookupTimeoutId);
     lookupTimeoutId = null;
   }
-  if (heartbeatIntervalId !== null) {
-    clearInterval(heartbeatIntervalId);
-    heartbeatIntervalId = null;
-  }
+  stopHeartbeat();
   currentTicket = null;
   busy = false;
   updatePopupStatus();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Initialize Socket.IO connection and event handlers.
-// Called when enabled transitions to true.
-// ─────────────────────────────────────────────────────────────────────────────
-function initSocket() {
-  if (socket) return; // Already initialized
-
-  socket = io(SERVER_URL, {
-    transports: ['websocket'],
-    autoConnect: false
+function sendResult(response) {
+  if (!currentTicket) return;
+  const { ticketNum, plateNum } = currentTicket;
+  postJSON('/result', { clientId, ticketNum, plateNum, response }).then(() => {
+    lastProcessed = `${ticketNum}|${plateNum}`;
+    updatePopupLastProcessed();
   });
+  clearCurrentLookup();
+}
 
-  // Prevent SW from sleeping until initial connect
-  chrome.runtime.requestKeepAlive();
+function handleTicket(ticketNum, plateNum) {
+  currentTicket = { ticketNum, plateNum };
+  busy = true;
+  updatePopupStatus();
+  startHeartbeat();
 
-  socket.on('connect', () => {
-    console.log('Background: WebSocket connected');
-    socket.emit('register', clientId);
-    updatePopupStatus();
-    requestTicket(); // immediately ask for work
+  const key = `${ticketNum}|${plateNum}`;
+  console.log(`Processing ticket ${key}`);
 
-    // Release keepAlive once connected and initial ready is sent
-    chrome.runtime.releaseKeepAlive();
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.warn('Background: WebSocket disconnected:', reason);
-    // If in-flight ticket, drop it
-    if (currentTicket) {
-      clearTimeout(lookupTimeoutId);
-      lookupTimeoutId = null;
-      if (heartbeatIntervalId) {
-        clearInterval(heartbeatIntervalId);
-        heartbeatIntervalId = null;
-      }
-      console.warn(`Dropping ticket ${currentTicket.ticketNum}|${currentTicket.plateNum} due to disconnect`);
-      currentTicket = null;
-      busy = false;
-      updatePopupStatus();
-    }
-  });
-
-  socket.on('assign_ticket', (data, serverAck) => {
-    const { ticketNum, plateNum } = data;
-    const key = `${ticketNum}|${plateNum}`;
-
-    if (busy) {
-      console.warn(`Already busy; refusing ticket ${key}`);
-      return serverAck({ status: 'busy' });
-    }
-
-    currentTicket = { ticketNum, plateNum };
-    busy = true;
-    updatePopupStatus();
-
-    console.log(`Background: accepted ticket ${key}`);
-    serverAck({ status: 'received' });
-
-    // Send heartbeat every 10 s
-    heartbeatIntervalId = setInterval(() => {
-      if (busy && currentTicket && socket && socket.connected) {
-        socket.emit('heartbeat', { ticketNum, plateNum });
-      }
-    }, 10000);
-
-    // 30 s watchdog: if content.js doesn't respond, reload page and report error
-    lookupTimeoutId = setTimeout(() => {
-      console.error(`Lookup for ${key} timed out after 30 s; reloading page`);
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) {
-          chrome.tabs.reload(tabs[0].id);
-        }
-      });
-      if (socket && socket.connected) {
-        socket.emit('ticket_result', {
-          ticketNum,
-          plateNum,
-          response: { error: true, message: 'Lookup timeout (30 s). Page reloaded.' }
-        }, (ack) => {
-          clearCurrentLookup();
-          requestTicket();
-        });
-      } else {
-        clearCurrentLookup();
-      }
-    }, 30000);
-
-    // Forward lookup request to content.js
+  lookupTimeoutId = setTimeout(() => {
+    console.error(`Lookup for ${key} timed out; reloading page`);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs[0]?.id) {
-        console.error('Background: No active tab to process ticket');
+      if (tabs[0]?.id) chrome.tabs.reload(tabs[0].id);
+    });
+    sendResult({ error: true, message: 'Lookup timeout (30 s). Page reloaded.' });
+  }, LOOKUP_TIMEOUT_MS);
+
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0]?.id) {
+      console.error('No active tab found');
+      sendResult({ error: true, message: 'No active tab found' });
+      return;
+    }
+    const tabId = tabs[0].id;
+    chrome.tabs.sendMessage(
+      tabId,
+      { action: 'runLookup', ticketNum, plateNum },
+      (response) => {
         clearTimeout(lookupTimeoutId);
         lookupTimeoutId = null;
-        if (heartbeatIntervalId) {
-          clearInterval(heartbeatIntervalId);
-          heartbeatIntervalId = null;
-        }
-        if (socket && socket.connected) {
-          socket.emit('ticket_result', {
-            ticketNum,
-            plateNum,
-            response: { error: true, message: 'No active tab found' }
-          }, (ack) => {
-            clearCurrentLookup();
-            requestTicket();
-          });
+        if (chrome.runtime.lastError || !response) {
+          const msg = chrome.runtime.lastError ? chrome.runtime.lastError.message : 'No response from content script';
+          sendResult({ error: true, message: msg });
         } else {
-          clearCurrentLookup();
+          sendResult(response);
         }
-        return;
       }
-
-      const tabId = tabs[0].id;
-      chrome.tabs.sendMessage(
-        tabId,
-        { action: 'runLookup', ticketNum, plateNum },
-        (response) => {
-          if (chrome.runtime.lastError || !response) {
-            const errorMsg = chrome.runtime.lastError
-              ? chrome.runtime.lastError.message
-              : 'No response from content script';
-            console.error('Background: runLookup error:', errorMsg);
-
-            clearTimeout(lookupTimeoutId);
-            lookupTimeoutId = null;
-            if (heartbeatIntervalId) {
-              clearInterval(heartbeatIntervalId);
-              heartbeatIntervalId = null;
-            }
-
-            if (socket && socket.connected) {
-              socket.emit('ticket_result', {
-                ticketNum,
-                plateNum,
-                response: { error: true, message: errorMsg }
-              }, (ack) => {
-                clearCurrentLookup();
-                requestTicket();
-              });
-            } else {
-              clearCurrentLookup();
-            }
-          } else {
-            clearTimeout(lookupTimeoutId);
-            lookupTimeoutId = null;
-            if (heartbeatIntervalId) {
-              clearInterval(heartbeatIntervalId);
-              heartbeatIntervalId = null;
-            }
-
-            if (socket && socket.connected) {
-              socket.emit('ticket_result', {
-                ticketNum,
-                plateNum,
-                response
-              }, (ack) => {
-                if (ack.ok) {
-                  lastProcessed = key;
-                  updatePopupLastProcessed();
-                }
-                clearCurrentLookup();
-                requestTicket();
-              });
-            } else {
-              clearCurrentLookup();
-            }
-          }
-        }
-      );
-    });
-  });
-
-  socket.on('ticket_completed', (data, ack) => {
-    const { ticketNum, plateNum, response } = data;
-    console.log(`Ticket ${ticketNum}|${plateNum} completed by another worker`, response);
-    ack?.({ ok: true });
+    );
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tear down Socket.IO: drop in-flight work, disconnect, remove handlers.
-// Called when enabled transitions to false.
-// ─────────────────────────────────────────────────────────────────────────────
-function tearDownSocket() {
-  if (!socket) return;
-
-  if (currentTicket) {
-    clearTimeout(lookupTimeoutId);
-    lookupTimeoutId = null;
-    if (heartbeatIntervalId) {
-      clearInterval(heartbeatIntervalId);
-      heartbeatIntervalId = null;
-    }
-    console.warn(`Dropping ticket ${currentTicket.ticketNum}|${currentTicket.plateNum} due to disable`);
-    currentTicket = null;
-    busy = false;
-    updatePopupStatus();
-  }
-
-  socket.disconnect();
-  socket.removeAllListeners();
-  socket = null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Periodic health check: every 5 s, if enabled but socket is not healthy, reconnect.
-// Also, if socket is healthy and not busy, request next ticket.
-// ─────────────────────────────────────────────────────────────────────────────
-setInterval(() => {
-  if (enabled) {
-    if (!socket || !socket.connected) {
-      console.log('Background: WebSocket not connected; attempting to initialize/reconnect');
-      initSocket();
-    } else {
-      // If connected and not busy, ask for work
-      requestTicket();
-    }
-  }
-}, RECONNECT_INTERVAL_MS);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POPUP COMMUNICATION & MANUAL LOOKUP
+// Enable/disable handling & popup communication
 // ─────────────────────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
     case 'setEnabled':
       enabled = request.enabled;
       updatePopupStatus();
-      if (enabled) {
-        initSocket();
-      } else {
-        tearDownSocket();
-      }
+      if (enabled) startPolling(); else stopPolling();
       sendResponse({ enabled, busy });
       break;
-
     case 'getStatus':
       sendResponse({ enabled, busy });
       break;
-
     case 'getLastProcessed':
       sendResponse({ last: lastProcessed });
       break;
-
     case 'runLookup':
-      // Popup manually triggers a lookup (rare). Forward to content.js:
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
           chrome.tabs.sendMessage(
@@ -331,10 +203,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ error: true, message: 'No active tab found' });
         }
       });
-      return true; // Indicate async sendResponse
-
+      return true;
     default:
       sendResponse({ error: true, message: 'Unknown action' });
   }
-  return true; // Keep message channel open if needed
+  return true;
 });
