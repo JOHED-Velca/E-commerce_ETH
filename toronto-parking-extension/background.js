@@ -142,6 +142,20 @@ function clearCurrentLookup() {
   updatePopupStatus();
 }
 
+// Open a fresh parking lookup tab and close any existing ones
+function refreshParkingTab() {
+  chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+    const existing = tabs || [];
+    chrome.tabs.create({ url: TARGET_URL_PREFIX }, (newTab) => {
+      for (const t of existing) {
+        if (t.id && t.id !== newTab.id) {
+          chrome.tabs.remove(t.id);
+        }
+      }
+    });
+  });
+}
+
 function sendResult(response) {
   if (!currentTicket) return;
   const { ticketNum, plateNum } = currentTicket;
@@ -153,6 +167,7 @@ function sendResult(response) {
   }).then(() => {
     lastProcessed = `${ticketNum}|${plateNum}`;
     updatePopupLastProcessed();
+    refreshParkingTab();
   });
   clearCurrentLookup();
 }
