@@ -13,6 +13,14 @@ const processing = new Map();
 const completed = new Set();
 const results = new Map();
 
+function clearTicket(key) {
+  processing.delete(key);
+  completed.delete(key);
+  results.delete(key);
+  const idx = pending.findIndex(t => ticketKey(t) === key);
+  if (idx !== -1) pending.splice(idx, 1);     // preserves the same array ref
+}
+
 function ticketKey(t) {
   return `${t.ticketNum}|${t.plateNum}`;
 }
@@ -75,11 +83,11 @@ app.get('/result/:ticketNum/:plateNum', (req, res) => {
   const key = `${req.params.ticketNum}|${req.params.plateNum}`;
   if (results.has(key)) {
     const response = results.get(key);
-    results.delete(key);
+    clearTicket(key); 
     return res.json({ response });
   }
   res.status(404).json({ error: 'not ready' });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+server.listen(PORT, () => console.log(`Server listening on ${PORT}`))
