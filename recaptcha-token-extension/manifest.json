@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "ReCaptcha Token Provider",
+  "version": "1.0",
+  "description": "Generates reCAPTCHA v3 tokens and sends them to a Socket.IO server.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
