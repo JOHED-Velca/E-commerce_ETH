@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Polling-based worker. When enabled it polls the server every second for work
 // and sends heartbeats while processing a ticket. Uses HTTP endpoints instead of
-// Socket.IO.
+// Socket.IO. Single interval manages both tasks.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SERVER_URL = 'http://localhost:3000';
@@ -18,7 +18,6 @@ let currentTicket = null; // { ticketNum, plateNum }
 let lastProcessed = null;
 
 let pollTimer = null;
-let heartbeatTimer = null;
 let lookupTimeoutId = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,44 +65,51 @@ function registerWorker() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Polling & heartbeat management
+// Polling & heartbeat management (single interval)
 // ─────────────────────────────────────────────────────────────────────────────
-function startPolling() {
+function startPollAndHeartbeat() {
   if (pollTimer) return;
   registerWorker();
+
   pollTimer = setInterval(async () => {
-    if (!enabled || busy) return;
-    const work = await getJSON(`/work/${clientId}`);
-    if (work && work.ticketNum && work.plateNum) {
-      handleTicket(work.ticketNum, work.plateNum);
+    // 1. If not enabled, do nothing.
+    if (!enabled) {
+      return;
+    }
+
+    // 2. If currently processing a ticket, send a heartbeat (if valid data).
+    if (busy) {
+      if (
+        currentTicket &&
+        currentTicket.ticketNum != null &&
+        currentTicket.plateNum != null
+      ) {
+        postJSON('/heartbeat', {
+          clientId,
+          ticketNum: currentTicket.ticketNum,
+          plateNum: currentTicket.plateNum
+        });
+      }
+      // Return early so we don't try to fetch new work while busy.
+      return;
+    }
+
+    // 3. If not busy, try to fetch new work.
+    try {
+      const work = await getJSON(`/work/${clientId}`);
+      if (work && work.ticketNum && work.plateNum) {
+        handleTicket(work.ticketNum, work.plateNum);
+      }
+    } catch (err) {
+      console.error('Error fetching work:', err);
     }
   }, POLL_INTERVAL_MS);
 }
 
-function stopPolling() {
+function stopPollAndHeartbeat() {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
-  }
-}
-
-function startHeartbeat() {
-  if (heartbeatTimer || !currentTicket) return;
-  heartbeatTimer = setInterval(() => {
-    if (currentTicket) {
-      postJSON('/heartbeat', {
-        clientId,
-        ticketNum: currentTicket.ticketNum,
-        plateNum: currentTicket.plateNum
-      });
-    }
-  }, POLL_INTERVAL_MS);
-}
-
-function stopHeartbeat() {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
   }
 }
 
@@ -115,7 +121,6 @@ function clearCurrentLookup() {
     clearTimeout(lookupTimeoutId);
     lookupTimeoutId = null;
   }
-  stopHeartbeat();
   currentTicket = null;
   busy = false;
   updatePopupStatus();
@@ -135,7 +140,6 @@ function handleTicket(ticketNum, plateNum) {
   currentTicket = { ticketNum, plateNum };
   busy = true;
   updatePopupStatus();
-  startHeartbeat();
 
   const key = `${ticketNum}|${plateNum}`;
   console.log(`Processing ticket ${key}`);
@@ -162,7 +166,9 @@ function handleTicket(ticketNum, plateNum) {
         clearTimeout(lookupTimeoutId);
         lookupTimeoutId = null;
         if (chrome.runtime.lastError || !response) {
-          const msg = chrome.runtime.lastError ? chrome.runtime.lastError.message : 'No response from content script';
+          const msg = chrome.runtime.lastError
+            ? chrome.runtime.lastError.message
+            : 'No response from content script';
           sendResult({ error: true, message: msg });
         } else {
           sendResult(response);
@@ -180,15 +186,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'setEnabled':
       enabled = request.enabled;
       updatePopupStatus();
-      if (enabled) startPolling(); else stopPolling();
+      if (enabled) {
+        startPollAndHeartbeat();
+      } else {
+        stopPollAndHeartbeat();
+      }
       sendResponse({ enabled, busy });
       break;
+
     case 'getStatus':
       sendResponse({ enabled, busy });
       break;
+
     case 'getLastProcessed':
       sendResponse({ last: lastProcessed });
       break;
+
     case 'runLookup':
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
@@ -204,6 +217,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       });
       return true;
+
     default:
       sendResponse({ error: true, message: 'Unknown action' });
   }
