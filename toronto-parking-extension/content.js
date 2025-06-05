@@ -100,6 +100,12 @@
       await new Promise((r) =>
         setTimeout(r, Math.floor(Math.random() * (400 - 100 + 1)) + 100)
       );
+      // Clear any existing value before typing the new ticket number
+      if (ticketInput.value) {
+        ticketInput.value = '';
+        ticketInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 50));
+      }
       ticketInput.value = '';
       for (const c of violationNum) {
         ticketInput.value += c;
@@ -136,6 +142,12 @@
       await new Promise((r) =>
         setTimeout(r, Math.floor(Math.random() * (400 - 100 + 1)) + 100)
       );
+      // Clear any existing value before typing the new plate number
+      if (plateInput.value) {
+        plateInput.value = '';
+        plateInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 50));
+      }
       plateInput.value = '';
       for (const c of plateNum) {
         plateInput.value += c;

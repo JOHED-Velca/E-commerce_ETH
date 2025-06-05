@@ -12,6 +12,11 @@ const POLL_INTERVAL_MS = 1000; // queue polling & heartbeat interval
 const LOOKUP_TIMEOUT_MS = 30000;
 const TARGET_URL_PREFIX = 'https://secure.toronto.ca/webapps/parking';
 
+// Stable id for this worker instance. Previously this was generated every time
+// `getClientId()` was called which meant heartbeats and results used a new id
+// each request. The queue server expects a consistent id, so generate it once.
+const CLIENT_ID = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
 let enabled = false;
 let busy = false;
 let currentTicket = null; // { ticketNum, plateNum }
@@ -62,8 +67,8 @@ function registerWorker() {
 }
 
 function getClientId() {
-  // Stable id for this worker instance
-  return `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  // Return the stable id generated at startup
+  return CLIENT_ID;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
