@@ -47,10 +47,10 @@ app.post('/enqueue', (req, res) => {
   }
   const key = `${ticketNum}|${plateNum}`;
 
-  if (!tickets.has(key)) {
+  if (!tickets.has(key) || tickets.get(key).status === 'completed') {
     tickets.set(key, { status: 'pending' });
-    console.log(`Enqueued ticket ${key}`);
   }
+  console.log(`Enqueued ticket ${key}`);
 
   broadcastQueueSize();
   return res.json({ queued: true });
@@ -82,7 +82,6 @@ app.get('/ticket/:ticketNum/:plateNum', (req, res) => {
   const result = { status: info.status };
   if (info.status === 'completed') {
     result.response = info.response;
-    tickets.delete(key); // remove once result delivered
   }
   if (info.status === 'assigned') {
     result.assignedTo = info.assignedTo;

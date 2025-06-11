@@ -179,15 +179,6 @@ function handleTicket(ticketNum, plateNum) {
   const key = `${ticketNum}|${plateNum}`;
   console.log(`Processing ticket ${key}`);
 
-  // If no lookup within TIMEOUT, reload and report error
-  lookupTimeoutId = setTimeout(() => {
-    console.error(`Lookup for ${key} timed out; reloading page`);
-    chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
-      if (tabs[0]?.id) chrome.tabs.reload(tabs[0].id);
-    });
-    sendResult({ error: true, message: 'Lookup timeout (30 s). Page reloaded.' });
-  }, LOOKUP_TIMEOUT_MS);
-
   runLookupInParkingTab(ticketNum, plateNum)
     .then((result) => {
       sendResult(result || { error: true, message: 'Empty response from lookup.' });
