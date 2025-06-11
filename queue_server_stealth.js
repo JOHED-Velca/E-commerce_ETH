@@ -13,7 +13,7 @@ app.use(express.json());
 
 // ------------------------- Proxy helpers -------------------------
 async function fetchProxy() {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
   await page.goto('https://sslproxies.org/', { waitUntil: 'domcontentloaded' });
   const proxies = await page.$$eval(
@@ -24,11 +24,12 @@ async function fetchProxy() {
 
   for (const proxy of proxies) {
     try {
-      const b = await puppeteer.launch({ headless: true, args: [`--proxy-server=${proxy}`] });
+      const b = await puppeteer.launch({ headless: false, args: [`--proxy-server=${proxy}`] });
       const p = await b.newPage();
       await p.goto('https://www.whatismyip.com/proxy-check/?iref=home', { timeout: 10000, waitUntil: 'domcontentloaded' });
       const body = await p.content();
       await b.close();
+      console.log(`Testing proxy: ${proxy}`);
       if (body.includes('Proxy Type')) {
         console.log(`Using proxy: ${proxy}`);
         return proxy;

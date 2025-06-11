@@ -17,23 +17,15 @@ const searchList = [
     },
     {
         plateNum:  'czcl340',
-        ticketNum: 'PM451053',
+        ticketNum: 'PM451052',
     },
     {
         plateNum:  'czcl340',
-        ticketNum: 'PM451054',
+        ticketNum: 'PM451052',
     },
     {
         plateNum:  'czcl340',
-        ticketNum: 'PM451055',
-    },
-    {
-        plateNum:  'czcl340',
-        ticketNum: 'PM451056',
-    },
-    {
-        plateNum:  'czcl340',
-        ticketNum: 'PM451057',
+        ticketNum: 'PM451052',
     },
 ]
 
