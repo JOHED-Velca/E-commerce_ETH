@@ -186,12 +186,11 @@ function handleTicket(ticketNum, plateNum) {
     sendResult(result || { error: true, message: 'Empty response from lookup.' });
   })
   .catch((err) => {
+    refreshParkingTab();
     sendResult({ error: true, message: err.message || 'Lookup failed' });
   }).finally(() => {
     // Clear the current lookup after processing
     clearCurrentLookup();
-    // Refresh the parking tab to show the latest state
-    refreshParkingTab();
   });
 }
 
