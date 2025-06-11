@@ -28,6 +28,9 @@ async function lookupTicket(ticketNum, plateNum) {
   // 1) Navigate
   await page.goto(TARGET_URL, { waitUntil: 'networkidle2' });
 
+    // 1) Navigate
+  await page.goto(TARGET_URL, { waitUntil: 'networkidle2' });
+
   // 2) Click “Agree to Terms” if present
   try {
     const agreeBtn = await page.waitForSelector('#cot-terms-agree', { timeout: 6000 });
