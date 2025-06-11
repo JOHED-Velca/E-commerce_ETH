@@ -1,7 +1,7 @@
 // puppy.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Puppeteer‐extra script (with stealth) to look up a single parking ticket.
-// Hard‐coded plate and ticket values, with guarded clicks and robust waits.
+// Hard‐coded plate and ticket values, using waitForSelector everywhere.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const puppeteer = require('puppeteer-extra');
@@ -18,40 +18,49 @@ async function lookupTicket(ticketNum, plateNum) {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage'
-    ]
+      '--disable-dev-shm-usage',
+    ],
   });
   const page = await browser.newPage();
 
-  // Navigate and wait until the network is quiet
+  // 1) Navigate
   await page.goto(TARGET_URL, { waitUntil: 'networkidle2' });
 
+  // 2) Click “Agree to Terms” if present
   try {
-  // If there's a “terms” button, click it
-  const agreeBtn = await page.waitForSelector('#cot-terms-agree', { timeout: 6000 });
-  if (agreeBtn) {
+    const agreeBtn = await page.waitForSelector('#cot-terms-agree', { timeout: 6000 });
     console.log('Clicking “Agree to Terms”');
     await agreeBtn.click();
-    // wait a moment for the form to show
-    await page.waitForTimeout(500);
-  }
-  } catch (err) {}
-
-  // If there's a “lookup” tab/button, click it
-  const lookupTab = await page.$('#lookupvialp');
-  if (lookupTab) {
-    console.log('Switching to lookup form');
-    await lookupTab.click();
     await page.waitFor(500);
+  } catch (err) {
+    // ignore if not found
   }
 
-  // Now fill out and submit
-  await page.waitForSelector('#ticketnumB', { timeout: 10000 });
-  await page.type('#ticketnumB', ticketNum);
-  await page.type('#licenseplate', plateNum);
-  await page.click('#singlebutton');
+  // 3) Switch to lookup form
+  const lookupTab = await page.waitForSelector('#lookupvialp', { timeout: 10000 });
+  console.log('Switching to lookup form');
+  await lookupTab.click();
+  await page.waitFor(500);
 
-  // Wait for the results table to appear
+  // 4) Fill in ticket number
+  const ticketInput = await page.waitForSelector('#ticketnumB', { timeout: 10000 });
+  await ticketInput.focus();
+  await page.waitFor(200);
+  await ticketInput.click({ clickCount: 3 });
+  await ticketInput.type(ticketNum, { delay: 100 });
+
+  // 5) Fill in plate number
+  const plateInput = await page.waitForSelector('#licenseplate', { timeout: 10000 });
+  await plateInput.focus();
+  await page.waitFor(200);
+  await plateInput.click({ clickCount: 3 });
+  await plateInput.type(plateNum, { delay: 100 });
+
+  // 6) Submit
+  const submitBtn = await page.waitForSelector('#singlebutton', { timeout: 10000 });
+  await submitBtn.click();
+
+  // 7) Wait for results row
   await page.waitForSelector('#parkingtickets tbody tr', { timeout: 15000 });
   const row = await page.$('#parkingtickets tbody tr');
 
@@ -65,7 +74,7 @@ async function lookupTicket(ticketNum, plateNum) {
         plate:  tds[2]?.innerText.trim(),
         status: tds[3]?.innerText.trim(),
         amount: tds[4]?.innerText.replace('$','').trim(),
-        action: tds[5]?.innerText.trim()
+        action: tds[5]?.innerText.trim(),
       };
     }, row);
   } else {
