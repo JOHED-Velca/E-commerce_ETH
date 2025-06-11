@@ -9,7 +9,6 @@
 
 const SERVER_URL = 'http://localhost:3000';
 const POLL_INTERVAL_MS = 1000; // queue polling & heartbeat interval
-const LOOKUP_TIMEOUT_MS = 30000;
 const TARGET_URL_PREFIX = 'https://secure.toronto.ca/webapps/parking';
 const ALARM_NAME = 'tp-keepalive';
 const ALARM_INTERVAL_MIN = 1;
@@ -195,6 +194,14 @@ function handleTicket(ticketNum, plateNum) {
     })
     .catch((err) => {
       sendResult({ error: true, message: err.message || 'Lookup failed' });
+    }).finally(() => {
+      try {
+        chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+          if (tabs[0]?.id) chrome.tabs.reload(tabs[0].id);
+        });
+      } catch (reloadErr) {
+        console.error('Failed to reload parking tab:', reloadErr);
+      }
     });
 }
 
