@@ -141,18 +141,22 @@ function clearCurrentLookup() {
   updatePopupStatus();
 }
 
-// Open a fresh parking lookup tab and close any existing ones
-function refreshParkingTab() {
-  chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
-    const existing = tabs || [];
-    chrome.tabs.create({ url: TARGET_URL_PREFIX }, (newTab) => {
-      for (const t of existing) {
-        if (t.id && t.id !== newTab.id) {
-          chrome.tabs.remove(t.id);
-        }
+const refreshParkingTab = () => {
+  try {
+    // Find any tab whose URL starts with TARGET_URL_PREFIX
+    chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
+      const tab = tabs[0];
+      if (tab?.id && tab.url) {
+        chrome.tabs.remove(tab.id);
       }
+      // If none found, just open a new one
+      chrome.tabs.create({ url: TARGET_URL_PREFIX }, (newTab) => {
+        console.log('Opened new parking tab as', newTab.id);
+      });
     });
-  });
+  } catch (reloadErr) {
+    console.error('Failed to refresh parking tab:', reloadErr);
+  }
 }
 
 function sendResult(response) {
@@ -166,9 +170,7 @@ function sendResult(response) {
   }).then(() => {
     lastProcessed = `${ticketNum}|${plateNum}`;
     updatePopupLastProcessed();
-    refreshParkingTab();
   });
-  clearCurrentLookup();
 }
 
 function handleTicket(ticketNum, plateNum) {
@@ -180,20 +182,17 @@ function handleTicket(ticketNum, plateNum) {
   console.log(`Processing ticket ${key}`);
 
   runLookupInParkingTab(ticketNum, plateNum)
-    .then((result) => {
-      sendResult(result || { error: true, message: 'Empty response from lookup.' });
-    })
-    .catch((err) => {
-      sendResult({ error: true, message: err.message || 'Lookup failed' });
-    }).finally(() => {
-      try {
-        chrome.tabs.query({ url: `${TARGET_URL_PREFIX}*` }, (tabs) => {
-          if (tabs[0]?.id) chrome.tabs.reload(tabs[0].id);
-        });
-      } catch (reloadErr) {
-        console.error('Failed to reload parking tab:', reloadErr);
-      }
-    });
+  .then((result) => {
+    sendResult(result || { error: true, message: 'Empty response from lookup.' });
+  })
+  .catch((err) => {
+    sendResult({ error: true, message: err.message || 'Lookup failed' });
+  }).finally(() => {
+    // Clear the current lookup after processing
+    clearCurrentLookup();
+    // Refresh the parking tab to show the latest state
+    refreshParkingTab();
+  });
 }
 
 // Run a single sendMessage; assumes content.js is already injected via manifest

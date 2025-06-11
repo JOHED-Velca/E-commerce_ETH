@@ -10,10 +10,32 @@ const DEFAULT_PLATE  = 'czcl340';
 const DEFAULT_TICKET = 'PM451052';
 
 // build a list of 10 identical objects for testing
-const searchList = Array.from({ length: 10 }, () => ({
-  plateNum:  DEFAULT_PLATE,
-  ticketNum: DEFAULT_TICKET,
-}));
+const searchList = [
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451052',
+    },
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451053',
+    },
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451054',
+    },
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451055',
+    },
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451056',
+    },
+    {
+        plateNum:  'czcl340',
+        ticketNum: 'PM451057',
+    },
+]
 
 const ENQUEUE_URL = 'http://localhost:3000/enqueue';
 const TICKET_URL = ({ ticketNum, plateNum }) =>
