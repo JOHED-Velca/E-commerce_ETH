@@ -12,6 +12,8 @@ const TARGET_URL = 'https://secure.toronto.ca/webapps/parking/';
 const TICKET_NUM = 'PM451052';
 const PLATE_NUM  = 'czcl340';
 
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+
 async function lookupTicket(ticketNum, plateNum) {
   const browser = await puppeteer.launch({
     headless: false,
@@ -31,7 +33,7 @@ async function lookupTicket(ticketNum, plateNum) {
     const agreeBtn = await page.waitForSelector('#cot-terms-agree', { timeout: 6000 });
     console.log('Clicking “Agree to Terms”');
     await agreeBtn.click();
-    await page.waitFor(500);
+    await sleep(500);
   } catch (err) {
     // ignore if not found
   }
@@ -40,19 +42,19 @@ async function lookupTicket(ticketNum, plateNum) {
   const lookupTab = await page.waitForSelector('#lookupvialp', { timeout: 10000 });
   console.log('Switching to lookup form');
   await lookupTab.click();
-  await page.waitFor(500);
+  await sleep(500);
 
   // 4) Fill in ticket number
   const ticketInput = await page.waitForSelector('#ticketnumB', { timeout: 10000 });
   await ticketInput.focus();
-  await page.waitFor(200);
+  await sleep(200);
   await ticketInput.click({ clickCount: 3 });
   await ticketInput.type(ticketNum, { delay: 100 });
 
   // 5) Fill in plate number
   const plateInput = await page.waitForSelector('#licenseplate', { timeout: 10000 });
   await plateInput.focus();
-  await page.waitFor(200);
+  await sleep(200);
   await plateInput.click({ clickCount: 3 });
   await plateInput.type(plateNum, { delay: 100 });
 
