@@ -16,10 +16,13 @@ async function fetchProxy() {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
   await page.goto('https://sslproxies.org/', { waitUntil: 'domcontentloaded' });
+  console.log('Fetching proxies from sslproxies.org...');
+  console.log(page);
   const proxies = await page.$$eval(
     "table.table tbody tr",
     rows => rows.map(r => `${r.children[0].textContent.trim()}:${r.children[1].textContent.trim()}`)
   );
+  console.log(`Found ${proxies} proxies`);
   await browser.close();
 
   for (const proxy of proxies) {
@@ -54,7 +57,7 @@ async function getProxy() {
 async function lookupTicket(ticketNum, plateNum) {
   const proxy = await getProxy();
   const args = proxy ? [`--proxy-server=${proxy}`] : [];
-  const browser = await puppeteer.launch({ headless: true, args });
+  const browser = await puppeteer.launch({ headless: false, args });
   const page = await browser.newPage();
   await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded' });
 

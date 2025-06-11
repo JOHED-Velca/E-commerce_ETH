@@ -43,6 +43,7 @@ async function main() {
       } else {
         // status is 'pending' or 'assigned'; keep polling
         console.log(`Ticket ${ticket}|${plate} status: ${status}. Retrying...`);
+        console.log(data.response);
       }
     } catch (err) {
       if (err.response && err.response.status === 404) {
