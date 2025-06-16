@@ -7,6 +7,39 @@
 // Assumes content.js is injected once via manifest.
 // ─────────────────────────────────────────────────────────────────────────────
 
+importScripts('proxifly.min.js');
+
+const proxifly = new Proxifly({ apiKey: 'api_test_key' });
+
+async function configureProxy() {
+  try {
+    const info = await proxifly.getProxy({
+      protocol: 'http',
+      anonymity: 'elite',
+      country: 'US',
+      https: true,
+      speed: 10000,
+      format: 'json',
+      quantity: 1,
+    });
+    const proxy = Array.isArray(info) ? info[0] : info;
+    if (proxy?.ipPort) {
+      const [host, portStr] = proxy.ipPort.split(':');
+      const port = parseInt(portStr, 10) || 80;
+      const scheme = proxy.protocol || 'http';
+      const config = {
+        mode: 'fixed_servers',
+        rules: { singleProxy: { scheme, host, port } },
+      };
+      chrome.proxy.settings.set({ value: config, scope: 'regular' });
+    }
+  } catch (err) {
+    console.error('Failed to configure proxy', err);
+  }
+}
+
+configureProxy();
+
 const SERVER_URL = 'http://localhost:3000';
 const POLL_INTERVAL_MS = 1000; // queue polling & heartbeat interval
 const TARGET_URL_PREFIX = 'https://secure.toronto.ca/webapps/parking';
