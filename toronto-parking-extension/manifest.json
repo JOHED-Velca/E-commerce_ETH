@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "alarms"
+    "alarms",
+    "proxy"
   ],
   "host_permissions": [
     "https://secure.toronto.ca/webapps/parking/*",
