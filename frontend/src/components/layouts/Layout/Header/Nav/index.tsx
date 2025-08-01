@@ -3,6 +3,7 @@ import { RiUserLine, RiMenuLine, RiCloseLine } from "react-icons/ri";
 import styles from "./index.module.scss";
 import { navData } from "../../../../../data/navItems";
 import CartIcon from "./CartIcon";
+import WalletCard from "./WalletCard";
 import { useEffect, useState } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { RiLoginBoxLine } from "react-icons/ri";
@@ -51,7 +52,7 @@ const Navbar: React.FC<NavBarProps> = ({ handleShow }) => {
     ? `${styles.nav} ${styles.hasScrolled}`
     : styles.nav;
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: any) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/catalog/search?query=${searchQuery}`);
@@ -121,6 +122,7 @@ const Navbar: React.FC<NavBarProps> = ({ handleShow }) => {
               <CartIcon />
             </div>
           </li>
+          <WalletCard />
           <li className="relative">
             <div className="hidden">
               <NavLink to={`/login`} className={styles.link}>
