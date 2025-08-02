@@ -70,6 +70,12 @@ const WalletCard = () => {
     }
   };
 
+  // Function to format address to show first 4 and last 4 characters
+  const formatAddress = (address: string) => {
+    if (!address) return "";
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  };
+
 
   return (
     <div className="relative">
@@ -87,7 +93,7 @@ const WalletCard = () => {
           ></div>
           
           {/* Wallet Card Modal */}
-          <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
+          <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4" style={{ width: '330px', height: '300px' }}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Wallet</h3>
               <button 
@@ -108,7 +114,7 @@ const WalletCard = () => {
               <div className="space-y-3">
                 <div className="p-3 bg-gray-50 rounded">
                   <p className="text-sm font-medium text-gray-600">Address:</p>
-                  <p className="text-xs font-mono break-all">{defaultAccount}</p>
+                  <p className="text-sm font-mono font-semibold">{formatAddress(defaultAccount)}</p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded">
                   <p className="text-sm font-medium text-gray-600">Wallet Amount:</p>
