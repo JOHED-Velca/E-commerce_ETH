@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { IoWalletOutline } from "react-icons/io5";
 
-// import styles from "./index.module.scss";
-// import { useAppSelector } from "../../../../../../app/hooks";
-
 import { ethers } from "ethers";
 import Button from "../../../../../components/Button";
+
+import { useTokenBalance } from "@/hooks/useContract";
 
 // Extend Window interface to include ethereum
 declare global {
@@ -19,6 +18,7 @@ const WalletCard = () => {
   const [defaultAccount, setDefaultAccount] = useState<string | null>(null);
   const [userBalance, setUserBalance] = useState<string | null>(null);
   const [showWalletCard, setShowWalletCard] = useState(false);
+  const fctBalance = useTokenBalance(defaultAccount ?? undefined);
 
   const connectwalletHandler = async () => {
     if (window.ethereum) {
@@ -119,6 +119,10 @@ const WalletCard = () => {
                 <div className="p-3 bg-gray-50 rounded">
                   <p className="text-sm font-medium text-gray-600">Wallet Amount:</p>
                   <p className="text-lg font-bold">{userBalance} ETH</p>
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-gray-600">FCT Token Balance:</p>
+                    <p className="text-lg font-bold">{fctBalance ?? "Loading..."} FCT</p>
+                  </div>
                 </div>
                 <Button 
                   onClick={() => {
