@@ -15,6 +15,8 @@ import { TbTruckReturn } from "react-icons/tb";
 import Spinner from "../../components/components/Spinner";
 import axios from "axios";
 
+import CryptoCheckout from "@/components/components/Checkout";
+
 const Cart = () => {
   const { cartItems, isLoading } = useAppSelector((state) => state.cart);
   const dispatch = useAppDispatch();
@@ -154,6 +156,8 @@ const Cart = () => {
               <Button className={styles.button} onClick={handlePlaceOrder}>
                 Place Order
               </Button>
+
+              <CryptoCheckout orderId="ORDER-001" amountEth="0.01" />
             </div>
           </div>
         ) : (
