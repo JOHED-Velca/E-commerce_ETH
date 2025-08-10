@@ -64,6 +64,28 @@ You can view the shop dashboard on localhost:5173.
   - PostCSS
   - Autoprefixer
 
+
+## 📸 Screenshots
+
+Here are some screenshots of the project:
+
+
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="frontend/public/screenshoots/HomePage.png" alt="Home Page" width="350" /></td>
+      <td><img src="frontend/public/screenshoots/ProductsPage.png" alt="Products Page" width="350" /></td>
+    </tr>
+    <tr>
+      <td>
+        <img src="frontend/public/screenshoots/CartIcon.png" alt="Cart Icon" width="200" />
+        <img src="frontend/public/screenshoots/CartPayed.png" alt="Cart Payed" width="200" />
+      </td>
+      <td><img src="frontend/public/screenshoots/CryptoWallet.png" alt="Crypto Wallet" width="350" /></td>
+    </tr>
+  </table>
+</div>
+
 ## 📝 Project Structure
 
 ```
