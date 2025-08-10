@@ -86,7 +86,7 @@ const Catalog = () => {
                 <ProductCard
                   id={product.id}
                   key={product.id}
-                  title={product.name}
+                  name={product.name}
                   price={product.retailPrice}
                   image={product.thumbnail_url}
                 />
@@ -94,14 +94,16 @@ const Catalog = () => {
             </>
           )}
         {products?.map((product, index) => {
+          // Ensure price is a number
+          const price = typeof product.price === "number"
+            ? product.price
+            : Number(product.retailPrice) || 0;
           return (
             <ProductCard
               id={product.id}
               key={index}
-              title={product.name}
-              price={product.retailPrice}
-              // category={product.category}
-              // description={product.description}
+              name={product.name}
+              price={price}
               image={product.thumbnail_url}
             />
           );

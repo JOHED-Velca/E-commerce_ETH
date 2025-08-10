@@ -157,7 +157,7 @@ const Cart = () => {
                 Place Order
               </Button>
 
-              <CryptoCheckout orderId="ORDER-001" amountEth="0.01" />
+              <CryptoCheckout orderId="ORDER-001" amountEth="0.01" onPaid={() => dispatch(cartReset())} />
             </div>
           </div>
         ) : (

@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import { usePayment } from "@/hooks/usePayment";
 import Button from "@/components/components/Button";
 
+
 interface CryptoCheckoutProps {
   orderId: string;
   amountEth: string; // e.g., "0.01"
+  onPaid?: () => void;
 }
 
-const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ orderId, amountEth }) => {
+const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ orderId, amountEth, onPaid }) => {
   const { payWithETH, loading, txHash, error } = usePayment();
   const [confirmed, setConfirmed] = useState(false);
 
@@ -15,6 +17,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ orderId, amountEth }) =
     const result = await payWithETH(orderId, amountEth);
     if (result?.success) {
       setConfirmed(true);
+      if (onPaid) onPaid();
     }
   };
 

@@ -5,22 +5,25 @@ import { Product } from "../../../types/product";
 import { motion } from "framer-motion";
 import { useAppDispatch } from "../../../app/hooks";
 import { CartItem } from "../../../types/cart";
-import { addToCart } from "../../../features/cart/cartSlice";
+import { addItem } from "../../../features/cart/cartSlice";
 import { CgShoppingBag } from "react-icons/cg";
 import Button from "../Button";
 import Spinner from "../Spinner";
 
-interface ProductCardProps extends Product {
-  key: number;
+
+interface ProductCardProps {
+  id: number;
+  name: string;
+  price: number;
+  image: string;
+  key?: number;
 }
 
 const ProductCard: FC<ProductCardProps> = ({
   id,
   key,
-  title,
+  name,
   price,
-  // category,
-  // description,
   image,
 }) => {
   const dispatch = useAppDispatch();
@@ -39,25 +42,25 @@ const ProductCard: FC<ProductCardProps> = ({
       quantity: 1,
       product: {
         id: id,
-        name: title,
+        name: name,
         price: price,
         thumbnail_url: image,
-        // size:size,
-        // description: description,
-        // category: category,
+        external_id: "",
+        variants: 0,
+        synced: 0,
+        size: "M",
       },
     };
 
-    dispatch(addToCart(cartProduct)).then(() => {
-      setIsLoadingProduct(false);
-    });
+    dispatch(addItem(cartProduct));
+    setTimeout(() => setIsLoadingProduct(false), 500);
   };
 
   return (
     <motion.div
-      id={title}
-      key={key}
-      tabIndex={id}
+  id={name}
+  key={key}
+  tabIndex={id}
       whileHover={{ cursor: "pointer" }}
       // onMouseEnter={() => showActionIcons(true)}
       // onMouseLeave={() => showActionIcons(false)}
@@ -71,7 +74,7 @@ const ProductCard: FC<ProductCardProps> = ({
         <div className={styles.productPic}>
           <Link to={`/products/${String(id)}`}>
             {/* <img src={image} alt={title} /> */}
-            <img src="https://img.freepik.com/premium-photo/white-blouse-isolated-white_392895-310758.jpg?w=740" alt={title} />
+            <img src={image} alt={name} />
           </Link>
         </div>
       </div>
@@ -82,7 +85,7 @@ const ProductCard: FC<ProductCardProps> = ({
         >
           <div className={styles.productDetails}>
             <div className={styles.productTitle}>
-              <div>{title}</div>
+              <div>{name}</div>
             </div>
             <div className={styles.productPrice}>{price}$</div>
           </div>

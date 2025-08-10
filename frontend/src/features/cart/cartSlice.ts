@@ -90,6 +90,19 @@ export const cartSlice = createSlice({
       localStorage.removeItem('totalQuantity');
       return initialState;
     },
+    addItem: (state: CartState, action: PayloadAction<CartItem>) => {
+      const itemIndex = state.cartItems.findIndex(
+        (item) => item.product.id === action.payload.product.id
+      );
+      if (itemIndex >= 0) {
+        state.cartItems[itemIndex].quantity += 1;
+      } else {
+        state.cartItems.push({ ...action.payload, quantity: 1 });
+      }
+      state.totalItems += 1;
+      updateLocalStorage(state.cartItems);
+      state.status = STATUS.IDLE;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -215,5 +228,5 @@ export const cartSlice = createSlice({
   },
 });
 
-export const { cartReset } = cartSlice.actions;
+export const { cartReset, addItem } = cartSlice.actions;
 export default cartSlice.reducer;
