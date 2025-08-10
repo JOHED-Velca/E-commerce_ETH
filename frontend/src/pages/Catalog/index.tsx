@@ -47,6 +47,27 @@ const Catalog = () => {
     ?.split("-")
     ?.map((word) => word?.charAt(0)?.toUpperCase() + word?.slice(1))
     ?.join(" ");
+    // Dummy hoodie products for testing
+    const dummyHoodies = [
+      {
+        id: 1001,
+        name: "Classic Black Hoodie",
+        retailPrice: 39.99,
+        thumbnail_url: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=400&q=80",
+      },
+      {
+        id: 1002,
+        name: "FlowCart Logo Hoodie",
+        retailPrice: 44.99,
+        thumbnail_url: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=400&q=80",
+      },
+      {
+        id: 1003,
+        name: "Oversized Grey Hoodie",
+        retailPrice: 34.99,
+        thumbnail_url: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=400&q=80",
+      },
+    ];
 
   if (isLoading) return <Spinner />;
   return (
@@ -58,6 +79,20 @@ const Catalog = () => {
         <div className={styles.title}>{convertedString}</div>
       </div>
       <div className={styles.productList}>
+          {/* Dummy Hoodie Section for Payment Testing */}
+          {convertedString?.toLowerCase().includes("hoodie") && (
+            <>
+              {dummyHoodies.map((product) => (
+                <ProductCard
+                  id={product.id}
+                  key={product.id}
+                  title={product.name}
+                  price={product.retailPrice}
+                  image={product.thumbnail_url}
+                />
+              ))}
+            </>
+          )}
         {products?.map((product, index) => {
           return (
             <ProductCard
