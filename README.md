@@ -1,5 +1,17 @@
 # E-SHOP
 
+**E-SHOP** is a modern e-commerce platform that seamlessly integrates traditional shopping features with cutting-edge blockchain technology. Built with React, TypeScript, and Redux, this project allows users to browse products, manage their cart, and complete purchases using Ethereum (ETH) directly from their crypto wallet. 
+
+Key highlights:
+- **Blockchain Integration:** The backend leverages smart contracts written in Solidity, deployed on Ethereum, to handle secure and transparent payment transactions.
+- **ETH Payments:** Users can pay for their orders using ETH, with wallet connection and transaction confirmation handled via MetaMask and Ethers.js.
+- **Smart Contracts:** All payment logic is managed by custom smart contracts, ensuring trustless and decentralized order processing.
+- **Web3 Experience:** The frontend provides a smooth Web3 experience, including wallet connection, token balance display, and crypto checkout.
+
+This project demonstrates how blockchain and smart contracts can be used to power real-world e-commerce applications, offering both traditional and crypto-native payment options for users.
+
+# E-SHOP
+
 A modern e-commerce web application built with React, TypeScript, and Redux.
 
 ## 🚀 Features
